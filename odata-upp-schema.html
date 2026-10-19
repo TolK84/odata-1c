@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OData в 1С:УПП</title>
+<style>
+  :root { --bg:#ffffff; --fg:#111418; --muted:#5f6670; --line:#d9dde2; --soft:#f6f7f8; --accent:#1f3b5a; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg:#121417; --fg:#e6e8eb; --muted:#9aa1ab; --line:#2d3238; --soft:#181b1f; --accent:#8fb0d3; }
+  }
+  * { box-sizing:border-box; }
+  html, body { background:var(--bg); }
+  body { margin:0; color:var(--fg); font:15px/1.55 -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
+  main { max-width:1000px; margin:0 auto; padding:44px 16px 64px; }
+  header { border-bottom:1px solid var(--line); padding-bottom:18px; margin-bottom:28px; }
+  h1 { font-size:22px; font-weight:600; margin:0 0 6px; }
+  header p { margin:0; color:var(--muted); }
+  #diagram { overflow-x:auto; padding:8px 0; }
+  #diagram svg { display:block; margin:0 auto; max-width:100%; height:auto; }
+  h2 { font-size:15px; font-weight:600; margin:40px 0 10px; }
+  .box { border-left:3px solid var(--accent); padding:4px 0 4px 14px; }
+  .note { color:var(--muted); font-size:14px; margin:0 0 12px; }
+  code, pre { font-family:Consolas, "SF Mono", Menlo, monospace; font-size:12.5px; }
+  code { background:var(--soft); border:1px solid var(--line); border-radius:4px; padding:1px 5px; word-break:break-all; }
+  pre { background:var(--soft); border:1px solid var(--line); border-radius:8px; padding:16px; margin:0; overflow-x:auto; line-height:1.6; tab-size:4; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Включение OData в 1С:УПП (платформа 8.3.11)</h1>
+    <p>Вопросы администраторам 1С и работы по каждому ответу.</p>
+  </header>
+
+  <div id="diagram"></div>
+
+  <h2>Приёмка</h2>
+  <div class="box">
+    Под техническим пользователем, с места подключения, запрос
+    <code>http://&lt;сервер&gt;/&lt;имя&gt;/odata/standard.odata/Catalog_Номенклатура?$format=json&amp;$top=10</code>
+    возвращает данные.
+  </div>
+
+  <h2>Приложение. Состав OData кодом</h2>
+  <p class="note">Для шага 5, ответ «Нет». Выполняется в режиме 1С:Предприятие под администратором через внешнюю обработку.</p>
+<pre>Объекты = Новый Массив;
+Коллекции = Новый Массив;
+Коллекции.Добавить(Метаданные.Константы);
+Коллекции.Добавить(Метаданные.Справочники);
+Коллекции.Добавить(Метаданные.Документы);
+Коллекции.Добавить(Метаданные.Перечисления);
+Коллекции.Добавить(Метаданные.ПланыВидовХарактеристик);
+Коллекции.Добавить(Метаданные.ПланыСчетов);
+Коллекции.Добавить(Метаданные.РегистрыСведений);
+Коллекции.Добавить(Метаданные.РегистрыНакопления);
+Коллекции.Добавить(Метаданные.РегистрыБухгалтерии);
+
+Для Каждого Коллекция Из Коллекции Цикл
+	Для Каждого Объект Из Коллекция Цикл
+		Объекты.Добавить(Объект);
+	КонецЦикла;
+КонецЦикла;
+
+УстановитьСоставСтандартногоИнтерфейсаOData(Объекты);
+Сообщить("В OData включено объектов: " + Объекты.Количество());</pre>
+</main>
+
+<script type="text/plain" id="src">
+flowchart TD
+  S([Старт]) --> Q1
+
+  Q1{"1. Тип базы?"}
+  Q1 -->|Файловая| W1a["Веб-сервер на машине с папкой базы<br/>Пулу IIS — права на папку"]
+  Q1 -->|Клиент-серверная| W1b["Веб-сервер на машине с доступом<br/>к серверу 1С, платформа 8.3.11"]
+  W1a --> Q2
+  W1b --> Q2
+
+  Q2{"2. Публикация<br/>есть?"}
+  Q2 -->|Нет| Q3{"3. IIS / Apache<br/>есть?"}
+  Q3 -->|Да| W3a["Опубликовать базу<br/>с флагом OData"]
+  Q3 -->|Нет| W3b["Установить веб-сервер<br/>и модуль расширения 1С,<br/>опубликовать с флагом OData"]
+  Q2 -->|Да| Q4
+  W3a --> Q4
+  W3b --> Q4
+
+  Q4{"4. Ответ<br/>$metadata?"}
+  Q4 -->|Ошибка| W4["Переопубликовать с флагом OData<br/>При повторе — права пула IIS,<br/>режим совместимости"]
+  W4 -. повторить .-> Q4
+  Q4 -->|Объектов нет| Q5{"5. Форма OData<br/>есть?"}
+  Q5 -->|Есть| W5a["Загрузить список<br/>базовых объектов"]
+  Q5 -->|Нет| W5b["Задать состав кодом<br/>из приложения"]
+  Q4 -->|Объекты есть| Q6
+  W5a --> Q6
+  W5b --> Q6
+
+  Q6{"6. Тех. пользователь<br/>есть?"}
+  Q6 -->|Нет| W6["Создать пользователя<br/>только на чтение"]
+  Q6 -->|Да| Q7
+  W6 --> Q7
+
+  Q7{"7. Лицензия<br/>свободна?"}
+  Q7 -->|Нет| W7["Выделить или<br/>докупить лицензию"]
+  Q7 -->|Да| Q8
+  W7 --> Q8
+
+  Q8{"8. Откуда<br/>доступ?"}
+  Q8 -->|Та же машина| D
+  Q8 -->|Локальная сеть| W8a["Открыть порт<br/>в брандмауэре"]
+  Q8 -->|Интернет / облако| W8b["Проброс порта или VPN + HTTPS<br/>Power BI — data gateway"]
+  W8a --> D
+  W8b --> D
+
+  D([Приёмка])
+
+  class Q1,Q2,Q3,Q4,Q5,Q6,Q7,Q8 q;
+  class W1a,W1b,W3a,W3b,W4,W5a,W5b,W6,W7,W8a,W8b w;
+  class S,D t;
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  (async function () {
+    var el = document.getElementById('diagram');
+    var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var c = dark ? {
+      qFill:'#1c2a3b', qStroke:'#8fb0d3', qText:'#e6e8eb',
+      wFill:'#181b1f', wStroke:'#3a4047', wText:'#d4d7db',
+      tFill:'#8fb0d3', tText:'#121417',
+      line:'#6b727b', label:'#9aa1ab', labelBg:'#121417'
+    } : {
+      qFill:'#ffffff', qStroke:'#1f3b5a', qText:'#1f3b5a',
+      wFill:'#f6f7f8', wStroke:'#c9ced4', wText:'#2b3036',
+      tFill:'#1f3b5a', tText:'#ffffff',
+      line:'#8a9099', label:'#5f6670', labelBg:'#ffffff'
+    };
+    var defs =
+      '\n  classDef q fill:' + c.qFill + ',stroke:' + c.qStroke + ',stroke-width:1.5px,color:' + c.qText + ',font-weight:600;' +
+      '\n  classDef w fill:' + c.wFill + ',stroke:' + c.wStroke + ',stroke-width:1px,color:' + c.wText + ';' +
+      '\n  classDef t fill:' + c.tFill + ',stroke:' + c.tFill + ',color:' + c.tText + ',font-weight:600;';
+    try {
+      mermaid.initialize({
+        startOnLoad:false,
+        theme:'base',
+        fontFamily:'-apple-system, Segoe UI, Helvetica Neue, Arial, sans-serif',
+        themeVariables:{
+          fontFamily:'-apple-system, Segoe UI, Helvetica Neue, Arial, sans-serif',
+          fontSize:'13px',
+          lineColor:c.line,
+          edgeLabelBackground:c.labelBg,
+          tertiaryTextColor:c.label
+        },
+        flowchart:{ curve:'basis', htmlLabels:true, nodeSpacing:40, rankSpacing:48, padding:12, diagramPadding:8 }
+      });
+      var res = await mermaid.render('odataFlow', document.getElementById('src').textContent + defs);
+      el.innerHTML = res.svg;
+      var st = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+      st.textContent =
+        '#odataFlow .edgeLabel{color:' + c.label + ';font-size:12px;}' +
+        '#odataFlow .edgeLabel p,#odataFlow .edgeLabel span{background:' + c.labelBg + ';}' +
+        '#odataFlow .node rect{rx:6px;ry:6px;}' +
+        '#odataFlow .flowchart-link{stroke-width:1.2px;}';
+      el.querySelector('svg').appendChild(st);
+    } catch (e) {
+      el.textContent = 'Не удалось построить схему: ' + (e && e.message ? e.message : e);
+    }
+  })();
+</script>
+</body>
+</html>
